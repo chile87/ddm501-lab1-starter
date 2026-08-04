@@ -1,0 +1,56 @@
+# =============================================================================
+# Docker Compose configuration for Movie Rating Prediction API
+# DDM501 - Lab 1: First ML Product
+#
+# TODO: Complete this docker-compose.yml
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # TODO: Configure the API service
+  # ---------------------------------------------------------------------------
+  # Requirements:
+  # - Service name: api
+  # - Build from current directory (.)
+  # - Map port 8000 to host port 8000
+  # - Mount ./models to /app/models (for model file access)
+  # - Set environment variable MODEL_PATH=/app/models/svd_model.pkl
+  # - Restart policy: unless-stopped
+  #
+  # Hint:
+  # api:
+  #   build: .
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - ./models:/app/models
+  #   environment:
+  #     - MODEL_PATH=/app/models/svd_model.pkl
+  #   restart: unless-stopped
+  
+  api:
+    # TODO: Complete this service configuration
+    build: .
+    # TODO: Add ports mapping
+    # TODO: Add volumes
+    # TODO: Add environment variables
+    # TODO: Add restart policy
+
+# =============================================================================
+# BONUS: Add additional services
+# =============================================================================
+# You can add these services for a more complete setup:
+#
+# redis:
+#   image: redis:7-alpine
+#   ports:
+#     - "6379:6379"
+#
+# prometheus:
+#   image: prom/prometheus
+#   ports:
+#     - "9090:9090"
+#   volumes:
+#     - ./prometheus.yml:/etc/prometheus/prometheus.yml
