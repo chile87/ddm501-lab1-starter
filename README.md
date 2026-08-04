@@ -1,8 +1,46 @@
-# Lab 1: First ML Product - Movie Rating Prediction API
+# Movie Rating Prediction API
 
-## Overview
+> DDM501 - Lab 1: First ML Product
 
-Build your first ML product - a Movie Rating Prediction API using collaborative filtering, REST API, and Docker containerization.
+A production-style REST API that serves a collaborative-filtering model
+predicting the rating (1.0-5.0) a given user would give a given movie.
+
+The model is a **Matrix Factorization (SVD)** recommender from the
+[Surprise](https://surpriselib.com/) library, trained on the
+**MovieLens 100K** dataset (100,000 ratings from 943 users on 1,682 movies).
+It is wrapped in a **FastAPI** service, containerized with **Docker**, and
+covered by a **pytest** suite.
+
+---
+
+## Features
+
+- **`POST /predict`** - rating prediction for a single user-movie pair
+- **`POST /predict/batch`** - up to 100 pairs in one round trip
+- **`GET /health`** - health probe reporting whether the model is loaded
+- **`GET /model/info`** - deployed model version and algorithm
+- **Interactive docs** - Swagger UI at `/docs`, ReDoc at `/redoc`, generated
+  from the code with request/response examples on every schema
+- **Input validation** - Pydantic rejects empty, oversized and malformed IDs
+  with `422` before the model is ever called
+- **Graceful degradation** - unknown user or movie IDs fall back to the global
+  mean instead of erroring; a missing model yields `503`, never a crash
+- **Model loaded once at startup** - unpickling dominates prediction cost, so
+  it happens in the app lifespan rather than per request
+- **Container health check** - inspects the response body, so a container
+  running without a model is correctly marked `unhealthy`
+
+---
+
+## Prerequisites
+
+| Requirement | Version |
+|---|---|
+| Python | 3.10+ |
+| Docker + Docker Compose | any recent version |
+| Git | any |
+
+---
 
 ## Project Structure
 
@@ -10,52 +48,54 @@ Build your first ML product - a Movie Rating Prediction API using collaborative 
 ddm501-lab1-starter/
 ├── app/
 │   ├── __init__.py
-│   ├── main.py           # FastAPI application (TODO)
-│   ├── model.py          # ML model loading & prediction (TODO)
-│   ├── schemas.py        # Pydantic models (TODO)
-│   └── config.py         # Configuration
-├── models/               # Saved ML models
+│   ├── main.py             # FastAPI application & endpoints
+│   ├── model.py            # MovieRatingModel wrapper (load / predict / batch)
+│   ├── schemas.py          # Pydantic request & response models
+│   └── config.py           # Environment-driven configuration
+├── models/
+│   └── svd_model.pkl       # Trained SVD model (committed)
+├── scripts/
+│   └── train_model.py      # Trains & saves the model
 ├── tests/
 │   ├── __init__.py
-│   └── test_api.py       # Unit tests (TODO)
-├── scripts/
-│   └── train_model.py    # Model training script
-├── Dockerfile            # (TODO)
-├── docker-compose.yml    # (TODO)
+│   ├── test_api.py         # API / integration tests
+│   └── test_model.py       # Unit tests for the model wrapper
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
+├── pytest.ini
 ├── requirements.txt
 └── README.md
 ```
 
-## Prerequisites
+---
 
-- Python 3.10+
-- Docker & Docker Compose
-- Git
+## Installation
 
-## Quick Start
-
-### 1. Clone and Setup
+### 1. Clone and set up the environment
 
 ```bash
-unzip ddm501-lab1-starter.zip
+git clone https://github.com/chile87/ddm501-lab1-starter.git
 cd ddm501-lab1-starter
 
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# venv\Scripts\activate   # Windows
+source venv/bin/activate     # Linux/macOS
+# venv\Scripts\activate      # Windows
 
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. Train the Model
+### 2. (Optional) Retrain the model
+
+The trained model is committed at `models/svd_model.pkl`, so the API runs
+straight away. To regenerate it:
 
 ```bash
 python scripts/train_model.py
 ```
 
-This will download MovieLens 100K dataset and train an SVD model.
+This downloads MovieLens 100K, runs 5-fold cross-validation (printing RMSE and
+MAE), retrains on the full dataset and writes `models/svd_model.pkl`.
 
 ### 3. Run the API
 
@@ -63,67 +103,186 @@ This will download MovieLens 100K dataset and train an SVD model.
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 4. Test the API
+Open <http://localhost:8000/docs> for the interactive Swagger UI.
+
+---
+
+## Run with Docker
 
 ```bash
-# Health check
-curl http://localhost:8000/health
+docker compose up -d --build
 
-# Predict
+# Wait for the health check to go green
+docker compose ps
+
+# Logs
+docker compose logs -f api
+
+# Stop
+docker compose down
+```
+
+The compose file maps port `8000`, bind-mounts `./models` read-only, and sets
+`MODEL_PATH`. The container is marked `healthy` only once the model is loaded.
+
+---
+
+## API Usage
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | API metadata and links |
+| `GET` | `/health` | Health check - is the model loaded? |
+| `POST` | `/predict` | Rating for one user-movie pair |
+| `POST` | `/predict/batch` | Ratings for many pairs (max 100) |
+| `GET` | `/model/info` | Model version and type |
+| `GET` | `/docs` | Swagger UI |
+| `GET` | `/redoc` | ReDoc |
+
+### Health check
+
+```bash
+curl http://localhost:8000/health
+```
+
+```json
+{ "status": "healthy", "model_loaded": true }
+```
+
+### Single prediction
+
+```bash
 curl -X POST "http://localhost:8000/predict" \
   -H "Content-Type: application/json" \
   -d '{"user_id": "196", "movie_id": "242"}'
 ```
 
-### 5. Run with Docker
-
-```bash
-docker-compose build
-docker-compose up -d
+```json
+{
+  "user_id": "196",
+  "movie_id": "242",
+  "predicted_rating": 3.64,
+  "model_version": "1.0.0"
+}
 ```
 
-## API Endpoints
+### Batch prediction
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Health check |
-| POST | `/predict` | Get rating prediction |
-| GET | `/docs` | Swagger documentation |
+```bash
+curl -X POST "http://localhost:8000/predict/batch" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "predictions": [
+          {"user_id": "196", "movie_id": "242"},
+          {"user_id": "186", "movie_id": "302"}
+        ]
+      }'
+```
 
-## TODO Tasks
+```json
+{
+  "predictions": [
+    { "user_id": "196", "movie_id": "242", "predicted_rating": 3.64, "model_version": "1.0.0" },
+    { "user_id": "186", "movie_id": "302", "predicted_rating": 3.72, "model_version": "1.0.0" }
+  ],
+  "total_count": 2
+}
+```
 
-Complete the following files:
+### Model info
 
-- [ ] `app/model.py` - Implement `load_model()`, `predict()`, `predict_batch()`
-- [ ] `app/schemas.py` - Define Pydantic request/response models
-- [ ] `app/main.py` - Implement `/predict` endpoint with error handling
-- [ ] `Dockerfile` - Complete with health check
-- [ ] `docker-compose.yml` - Configure services
-- [ ] `tests/test_api.py` - Add edge case tests
+```bash
+curl http://localhost:8000/model/info
+```
+
+```json
+{
+  "model_version": "1.0.0",
+  "model_type": "SVD (Collaborative Filtering)",
+  "is_loaded": true
+}
+```
+
+### Error responses
+
+| Status | When | Body |
+|---|---|---|
+| `422` | Missing, empty, oversized or wrong-typed field; batch over 100 items | FastAPI validation detail |
+| `500` | Unexpected failure inside the model | `{"detail": "..."}` |
+| `503` | Model not loaded | `{"detail": "Model not loaded"}` |
+
+```bash
+# Missing movie_id -> 422
+curl -i -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "196"}'
+```
+
+**Note on unknown IDs:** a user or movie the model has never seen is *not* an
+error. SVD falls back to the global mean, so the request returns `200` with a
+valid rating in the 1.0-5.0 range.
+
+---
+
+## Configuration
+
+All settings are environment variables with sensible defaults
+(see `app/config.py`):
+
+| Variable | Default | Description |
+|---|---|---|
+| `MODEL_PATH` | `models/svd_model.pkl` | Path to the pickled model |
+| `MODEL_VERSION` | `1.0.0` | Version reported in responses |
+| `HOST` | `0.0.0.0` | Bind address |
+| `PORT` | `8000` | Bind port |
+| `DEBUG` | `false` | Debug flag |
+
+---
 
 ## Running Tests
 
 ```bash
-# Run all tests
+# All tests
 pytest tests/ -v
 
-# Run with coverage
+# With coverage
+pytest tests/ -v --cov=app --cov-report=term-missing
+
+# HTML coverage report -> htmlcov/index.html
 pytest tests/ -v --cov=app --cov-report=html
 ```
 
-## Grading Rubric
+**62 tests, all passing, 95% statement coverage of `app/`.**
 
-| Criteria | Weight |
-|----------|--------|
-| Working ML Model | 25% |
-| REST API | 25% |
-| Docker Setup | 20% |
-| Test Cases | 20% |
-| Documentation | 10% |
+| File | Scope |
+|---|---|
+| `tests/test_model.py` | Model loading (missing file, corrupted pickle, wrong object), rating scale, rounding, determinism, unknown IDs, batch consistency, singleton reuse |
+| `tests/test_api.py` | Happy paths, input validation, edge cases (unknown/unicode/injection-like IDs), `503` and `500` handling, batch size limits and ordering, OpenAPI schema completeness |
 
-## Submission
+Tests can also be run inside the container:
 
-1. Complete all TODO tasks
-2. Ensure all tests pass
-3. Push to your GitHub repository
-4. Submit the repository link
+```bash
+docker compose exec api pytest tests/ -v
+```
+
+---
+
+## API Documentation
+
+FastAPI generates OpenAPI docs from the source. Every endpoint has a docstring,
+every Pydantic model carries an example, and error responses are declared, so
+Swagger UI is usable without reading the code:
+
+- Swagger UI: <http://localhost:8000/docs>
+- ReDoc: <http://localhost:8000/redoc>
+- Raw schema: <http://localhost:8000/openapi.json>
+
+---
+
+## Notes
+
+- `scikit-surprise` 1.1.3 imports `pkg_resources` at runtime, which
+  `setuptools` removed in version 81. `requirements.txt` pins `setuptools<81`
+  for this reason; the resulting `UserWarning` is harmless.
+- The Docker image installs `gcc`/`g++` because `scikit-surprise` compiles its
+  Cython extensions from source at install time.
