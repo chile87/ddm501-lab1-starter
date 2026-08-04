@@ -1,0 +1,38 @@
+# =============================================================================
+# Files excluded from the Docker build context.
+# Without this, `COPY . .` drags venv/, .git/ and htmlcov/ into the image.
+# =============================================================================
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Virtual environments (host binaries - useless and harmful inside the image)
+venv/
+env/
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Testing artifacts (tests/ itself is kept so the suite can run in the container)
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Lab notes (the README is kept)
+lab1.01.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
