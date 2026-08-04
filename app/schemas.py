@@ -1,73 +1,154 @@
 """
 Pydantic schemas for request/response validation.
 
-TODO: Complete the schema definitions below.
+These models define the public contract of the API and drive the Swagger
+documentation that FastAPI generates at /docs. Every field carries a
+description and every model carries an example, so the generated docs are
+usable without reading the source.
 """
 
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
+
+from pydantic import BaseModel, ConfigDict, Field
+
+# Maximum number of pairs accepted by /predict/batch. Keeps a single request
+# from tying up the worker for an unbounded amount of time.
+MAX_BATCH_SIZE = 100
+
+# Rating bounds of the MovieLens dataset the model was trained on.
+MIN_RATING = 1.0
+MAX_RATING = 5.0
 
 
 # =============================================================================
-# TODO 1: Define PredictionRequest schema
+# Prediction
 # =============================================================================
-# Requirements:
-# - user_id: string, required, example "196"
-# - movie_id: string, required, example "242"
-#
-# Hint: Use Field(..., example="value") for required fields with examples
-
 class PredictionRequest(BaseModel):
-    """Request schema for prediction endpoint."""
-    # TODO: Define fields here
-    pass
+    """Request schema for the /predict endpoint."""
 
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"user_id": "196", "movie_id": "242"}}
+    )
 
-# =============================================================================
-# TODO 2: Define PredictionResponse schema
-# =============================================================================
-# Requirements:
-# - user_id: string
-# - movie_id: string
-# - predicted_rating: float (the predicted rating 1.0-5.0)
-# - model_version: string
+    user_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="ID of the user to predict a rating for.",
+    )
+    movie_id: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="ID of the movie being rated.",
+    )
+
 
 class PredictionResponse(BaseModel):
-    """Response schema for prediction endpoint."""
-    # TODO: Define fields here
-    pass
+    """Response schema for the /predict endpoint."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "user_id": "196",
+                "movie_id": "242",
+                "predicted_rating": 3.64,
+                "model_version": "1.0.0",
+            }
+        },
+    )
+
+    user_id: str = Field(..., description="The user ID from the request.")
+    movie_id: str = Field(..., description="The movie ID from the request.")
+    predicted_rating: float = Field(
+        ...,
+        ge=MIN_RATING,
+        le=MAX_RATING,
+        description="Predicted rating, always between 1.0 and 5.0.",
+    )
+    model_version: str = Field(..., description="Version of the model that served this prediction.")
 
 
 # =============================================================================
-# TODO 3: Define HealthResponse schema
+# Batch prediction
 # =============================================================================
-# Requirements:
-# - status: string (e.g., "healthy", "unhealthy")
-# - model_loaded: boolean
-
-class HealthResponse(BaseModel):
-    """Response schema for health check endpoint."""
-    # TODO: Define fields here
-    pass
-
-
-# =============================================================================
-# BONUS: Define BatchPredictionRequest and BatchPredictionResponse
-# =============================================================================
-# For batch predictions (optional)
-
 class PredictionItem(BaseModel):
-    """Single prediction item for batch requests."""
-    user_id: str
-    movie_id: str
+    """A single user-movie pair inside a batch request."""
+
+    user_id: str = Field(..., min_length=1, max_length=64, description="ID of the user.")
+    movie_id: str = Field(..., min_length=1, max_length=64, description="ID of the movie.")
 
 
 class BatchPredictionRequest(BaseModel):
-    """Request schema for batch prediction endpoint."""
-    predictions: List[PredictionItem]
+    """Request schema for the /predict/batch endpoint."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "predictions": [
+                    {"user_id": "196", "movie_id": "242"},
+                    {"user_id": "186", "movie_id": "302"},
+                ]
+            }
+        }
+    )
+
+    predictions: List[PredictionItem] = Field(
+        ...,
+        max_length=MAX_BATCH_SIZE,
+        description=f"User-movie pairs to score (at most {MAX_BATCH_SIZE} per request).",
+    )
 
 
 class BatchPredictionResponse(BaseModel):
-    """Response schema for batch prediction endpoint."""
-    predictions: List[PredictionResponse]
-    total_count: int
+    """Response schema for the /predict/batch endpoint."""
+
+    predictions: List[PredictionResponse] = Field(
+        ..., description="One prediction per item in the request, in the same order."
+    )
+    total_count: int = Field(..., ge=0, description="Number of predictions returned.")
+
+
+# =============================================================================
+# Health & info
+# =============================================================================
+class HealthResponse(BaseModel):
+    """Response schema for the /health endpoint."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={"example": {"status": "healthy", "model_loaded": True}},
+    )
+
+    status: str = Field(..., description='"healthy" when the model is loaded, otherwise "unhealthy".')
+    model_loaded: bool = Field(..., description="Whether the model is loaded in memory.")
+
+
+class ModelInfoResponse(BaseModel):
+    """Response schema for the /model/info endpoint."""
+
+    model_config = ConfigDict(
+        protected_namespaces=(),
+        json_schema_extra={
+            "example": {
+                "model_version": "1.0.0",
+                "model_type": "SVD (Collaborative Filtering)",
+                "is_loaded": True,
+            }
+        },
+    )
+
+    model_version: str = Field(..., description="Version of the deployed model.")
+    model_type: str = Field(..., description="Algorithm behind the model.")
+    is_loaded: bool = Field(..., description="Whether the model is loaded in memory.")
+
+
+class ErrorResponse(BaseModel):
+    """Body returned for handled error responses (503, 500)."""
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"detail": "Model not loaded"}}
+    )
+
+    detail: str = Field(..., description="Human-readable description of the error.")
