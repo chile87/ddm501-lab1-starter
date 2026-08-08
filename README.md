@@ -1,6 +1,23 @@
 # Movie Rating Prediction API
 
-> DDM501 - Lab 1: First ML Product
+**Subject:** DDM501 - Lab 1: First ML Product
+## General Information
+
+**Lecturer**: Huynh Cong Viet Ngu
+
+**Nhóm**: Nhóm 3 
+ 
+**Member List**
+ 
+| Full name | MSSV | Role |
+|--------|------|---------|
+| Lê Thị Kim Chi | 25MS23290 | Team lead |
+| Trương Quốc Khánh | 25MS23285 | Member |
+| Trương Sỹ Quảng | 25MS23286 | Member  |
+| Nguyễn Việt Anh Minh | 25MS23275 | Member |
+ 
+---
+## Lab Overview 
 
 A production-style REST API that serves a collaborative-filtering model
 predicting the rating (1.0-5.0) a given user would give a given movie.
@@ -70,7 +87,7 @@ ddm501-lab1-starter/
 
 ---
 
-## Installation
+## Implemetantion Guide
 
 ### 1. Clone and set up the environment
 
@@ -78,42 +95,62 @@ ddm501-lab1-starter/
 git clone https://github.com/chile87/ddm501-lab1-starter.git
 cd ddm501-lab1-starter
 
+# Create virtual environment
 python -m venv venv
 source venv/bin/activate     # Linux/macOS
 # venv\Scripts\activate      # Windows
 
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Retrain the model
-
-The trained model is committed at `models/svd_model.pkl`, so the API runs
-straight away. To regenerate it:
+### 2. Prepare & Train the Model
 
 ```bash
 python scripts/train_model.py
 ```
 
-This downloads MovieLens 100K, runs 5-fold cross-validation (printing RMSE and
-MAE), retrains on the full dataset and writes `models/svd_model.pkl`.
+This will:
+- Download MovieLens 100K dataset (100,000 ratings from 943 users on 1,682 movies)
+- Train an SVD model using the Surprise library
+- Runs 5-fold cross-validation (printing RMSE and MAE)
+- Save the trained model to `models/` directory
+
+Note: The trained model is committed at `models/svd_model.pkl`, so the API runs
+straight away. 
 
 ### 3. Run the API
+Run FastAPI development server:
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+Access Swagger UI: <http://localhost:8000/docs>.
 
-Open <http://localhost:8000/docs> for the interactive Swagger UI.
+![image](img/swagger.png)
 
----
+### 4. Test the API
 
-## Run with Docker
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# Get prediction
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "196", "movie_id": "242"}'
+```
+
+### 5. Run with Docker
 
 ```bash
 docker compose up -d --build
 
 # Wait for the health check to go green
 docker compose ps
+
+# Access API
+curl http://localhost:8000/health
 
 # Logs
 docker compose logs -f api
@@ -125,8 +162,36 @@ docker compose down
 The compose file maps port `8000`, bind-mounts `./models` read-only, and sets
 `MODEL_PATH`. The container is marked `healthy` only once the model is loaded.
 
----
+### 6. Run Test
 
+```bash
+# Run all tests
+pytest tests/ -v
+
+# With coverage
+pytest tests/ -v --cov=app  --cov-report=term-missing
+
+# HTML coverage report -> htmlcov/index.html
+pytest tests/ -v --cov=app --cov-report=html
+```
+
+**62 tests, all passing, 95% statement coverage of `app/`.**
+
+| File | Scope |
+|---|---|
+| `tests/test_model.py` | Model loading (missing file, corrupted pickle, wrong object), rating scale, rounding, determinism, unknown IDs, batch consistency, singleton reuse |
+| `tests/test_api.py` | Happy paths, input validation, edge cases (unknown/unicode/injection-like IDs), `503` and `500` handling, batch size limits and ordering, OpenAPI schema completeness |
+
+Tests can also be run inside the container:
+
+```bash
+docker compose exec api pytest tests/ -v
+```
+---
+![image](img/test.png)
+![image](img/cov1.png)
+![image](img/cov2.png)
+![image](img/cov3.png)
 ## API Usage
 
 | Method | Endpoint | Description |
@@ -139,7 +204,9 @@ The compose file maps port `8000`, bind-mounts `./models` read-only, and sets
 | `GET` | `/docs` | Swagger UI |
 | `GET` | `/redoc` | ReDoc |
 
-### Health check
+### Request/Response Examples
+
+**Health Check:**
 
 ```bash
 curl http://localhost:8000/health
@@ -149,7 +216,7 @@ curl http://localhost:8000/health
 { "status": "healthy", "model_loaded": true }
 ```
 
-### Single prediction
+**Single Prediction:**
 
 ```bash
 curl -X POST "http://localhost:8000/predict" \
@@ -166,7 +233,7 @@ curl -X POST "http://localhost:8000/predict" \
 }
 ```
 
-### Batch prediction
+**Batch Prediction:**
 
 ```bash
 curl -X POST "http://localhost:8000/predict/batch" \
@@ -189,7 +256,7 @@ curl -X POST "http://localhost:8000/predict/batch" \
 }
 ```
 
-### Model info
+**Model Info:**
 
 ```bash
 curl http://localhost:8000/model/info
@@ -203,7 +270,7 @@ curl http://localhost:8000/model/info
 }
 ```
 
-### Error responses
+### Error Responses
 
 | Status | When | Body |
 |---|---|---|
@@ -236,34 +303,6 @@ All settings are environment variables with sensible defaults
 | `HOST` | `0.0.0.0` | Bind address |
 | `PORT` | `8000` | Bind port |
 | `DEBUG` | `false` | Debug flag |
-
----
-
-## Running Tests
-
-```bash
-# All tests
-pytest tests/ -v
-
-# With coverage
-pytest tests/ -v --cov=app --cov-report=term-missing
-
-# HTML coverage report -> htmlcov/index.html
-pytest tests/ -v --cov=app --cov-report=html
-```
-
-**62 tests, all passing, 95% statement coverage of `app/`.**
-
-| File | Scope |
-|---|---|
-| `tests/test_model.py` | Model loading (missing file, corrupted pickle, wrong object), rating scale, rounding, determinism, unknown IDs, batch consistency, singleton reuse |
-| `tests/test_api.py` | Happy paths, input validation, edge cases (unknown/unicode/injection-like IDs), `503` and `500` handling, batch size limits and ordering, OpenAPI schema completeness |
-
-Tests can also be run inside the container:
-
-```bash
-docker compose exec api pytest tests/ -v
-```
 
 ---
 
