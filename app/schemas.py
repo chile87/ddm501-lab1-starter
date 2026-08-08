@@ -27,6 +27,7 @@ class PredictionRequest(BaseModel):
     """Request schema for the /predict endpoint."""
 
     model_config = ConfigDict(
+        str_strip_whitespace=True,
         json_schema_extra={"example": {"user_id": "196", "movie_id": "242"}}
     )
 
@@ -49,6 +50,7 @@ class PredictionResponse(BaseModel):
 
     model_config = ConfigDict(
         protected_namespaces=(),
+        str_strip_whitespace=True,
         json_schema_extra={
             "example": {
                 "user_id": "196",
