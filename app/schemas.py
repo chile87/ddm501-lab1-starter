@@ -96,6 +96,7 @@ class BatchPredictionRequest(BaseModel):
 
     predictions: List[PredictionItem] = Field(
         ...,
+        min_length = 1,
         max_length=MAX_BATCH_SIZE,
         description=f"User-movie pairs to score (at most {MAX_BATCH_SIZE} per request).",
     )

@@ -363,13 +363,12 @@ class TestBatchPredictEndpoint:
         assert response.json()["total_count"] == 1
 
     def test_batch_predict_empty_list(self):
-        """Test batch prediction with empty list."""
+        """Test batch prediction with empty list returns 422 validation error."""
         response = client.post("/predict/batch", json={"predictions": []})
 
-        assert response.status_code == 200
+        assert response.status_code == 422
         data = response.json()
-        assert data["total_count"] == 0
-        assert data["predictions"] == []
+        assert "detail" in data
 
     def test_batch_predict_at_size_limit(self):
         """A batch exactly at the cap is accepted."""
