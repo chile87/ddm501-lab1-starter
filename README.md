@@ -5,7 +5,7 @@
 
 **Lecturer**: Huynh Cong Viet Ngu
 
-**Nhóm**: Nhóm 3 
+**Group**: Group 4
  
 **Member List**
  
@@ -319,7 +319,6 @@ Swagger UI is usable without reading the code:
 ---
 
 ## Notes
-
 - `scikit-surprise` 1.1.3 imports `pkg_resources` at runtime, which
   `setuptools` removed in version 81. `requirements.txt` pins `setuptools<81`
   for this reason; the resulting `UserWarning` is harmless.
